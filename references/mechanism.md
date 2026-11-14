@@ -40,12 +40,20 @@
 - 桌面快捷方式用 `WScript.Shell` 创建，指向启动器 `.ps1`。
 
 ## 四、macOS 实施要点与兜底
-- 主法：`HOME=$ALT_HOME /Applications/WorkBuddy.app/Contents/MacOS/WorkBuddy &`。若 WorkBuddy 的单实例锁是**全局**（按 app bundle id 而非 userData），此法会启动失败。
-- **兜底（可靠）**：建第二个 macOS 用户 → 快速用户切换登录该用户 → 在其会话里跑 WorkBuddy 登 B。两个用户会话同时登录，用 Mission Control / 空间并排查看。
-- 第二实例直接用二进制启动（非 `open -a`），避免被第一实例的单例接管。
+
+### 4.1 主法（已验证）：包装 .app + `open -a`
+- **关键坑**：WorkBuddy 的 Electron 二进制**不能直接从 shell `exec`**。直接运行 `/Applications/WorkBuddy.app/Contents/MacOS/Electron`（无论是否带 `HOME=$ALT_HOME`）都会报：
+  `Node.js environment variables are disabled because this process is invoked by other apps.`
+  然后直接退出。原因是该二进制必须经 LaunchServices（`open -a`）以合法上下文启动。
+- 但 `open -a` **不继承 shell 的 `HOME` 环境变量**，所以光用 `open -a /Applications/WorkBuddy.app` 无法隔离登录态（还是会读真实 HOME）。
+- **解法**：建一个极简**包装 .app**，其可执行脚本先 `export HOME=$ALT_HOME` 再 `exec` 真正的 Electron 二进制；用 `open -a` 启动这个包装 app，既拿到合法启动上下文绕开报错，又把 HOME 隔离到位。实测可同时跑起两个完全独立的 WorkBuddy 实例（第二实例的 `--user-data-dir` 指向 `$ALT_HOME/.workbuddy/app`，登录态/历史隔离）。
+- 单实例锁按 `userData`（即 `$HOME/.workbuddy/app`）加锁，两个实例 HOME 不同 → userData 不同 → 锁互不冲突，第二窗口正常启动。
+
+### 4.2 兜底（仍可靠）：第二 macOS 用户
+- 若你的 WorkBuddy 版本单实例锁是**全局**（按 app bundle id），包装 .app 方案可能失效，此时改用：建第二个 macOS 用户 → 快速用户切换登录该用户 → 在其会话里跑 WorkBuddy 登 B。两个用户会话同时登录，用 Mission Control / 空间并排查看。
 
 ## 五、常见故障
 - **窗口2 登成了 A**：第二环境里残留了 A 的 token。清空该环境的 auth 目录后重登 B。
 - **历史空白**：`workbuddy.db` 没克隆成功。核对源/目标字节一致；确认排除列表没把 `workbuddy.db` 误排。
-- **第二窗口起不来**：Windows 看 `runas` 密码是否正确；macOS 看是否被单例锁拦截（改用兜底）。
+- **第二窗口起不来（macOS）**：若报 `Node.js environment variables are disabled...`，说明脚本没走 `open -a` 包装方案——请重跑 `setup_mac.sh` 确保生成了 `~/WorkBuddyAlt.app` 并用它启动；若仍失败，改用第二 macOS 用户兜底。
 - **点开工程报错**：预期内（`workspaces` 路径绑定原用户），非故障，对话历史本身可用。

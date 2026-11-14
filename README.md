@@ -21,7 +21,7 @@ WorkBuddy 的 **登录态（token）是按操作系统用户主目录隔离的**
 | 平台 | 第二个窗口的隔离方式 | 是否需要管理员 | 可靠性 |
 |------|-------------------|---------------|--------|
 | **Windows** | 新建第二个本地 Windows 用户（如 `WBUser2`），用 `runas` 拉起 | 是（建用户 / 写其他用户目录） | ✅ 已验证 |
-| **macOS** | 为第二个实例指定独立的 `HOME` 目录 | 否 | ⚠️ 实验性，附第二用户兜底方案 |
+| **macOS** | 为第二个实例指定独立的 `HOME` 目录（包装 .app + `open -a` 启动） | 否 | ✅ 已验证 |
 
 ---
 
@@ -67,11 +67,12 @@ bash "<skill>/scripts/setup_mac.sh" [ALT_HOME] [WORKBUDDY_APP]
 
 默认 `ALT_HOME=~/WorkBuddyAltHome`，`WORKBUDDY_APP=/Applications/WorkBuddy.app`。脚本会：
 1. 创建独立 `HOME` 并把当前 `.workbuddy` 历史定向克隆进去；
-2. 在桌面生成 **`WorkBuddy 2Accounts.command`**。
+2. 生成一个**包装 .app**（`~/WorkBuddyAlt.app`）：它内部设置 `HOME=ALT_HOME` 后再 `exec` 真正的 WorkBuddy 二进制；
+3. 在桌面生成 **`WorkBuddy 2Accounts.command`** 启动器（用 `open -a` 拉起主窗口与包装 .app）。
 
 双击该 `.command`：窗口 1 = 主账号 A；窗口 2 = 独立 HOME 下的实例，登录账号 B 即可看到 B 的历史。
 
-> ⚠️ macOS 方案依赖"独立 HOME 能绕开单实例锁"。若第二窗口被单实例锁拦截无法启动，请改用**第二 macOS 用户兜底**：新建一个 macOS 用户 → 快速用户切换登录该用户 → 在其会话里跑 WorkBuddy 登 B；两个用户会话同时保持登录，用 Mission Control / 空间并排查看。
+> ⚠️ **macOS 坑（已修复）**：WorkBuddy 的 Electron 二进制**不能直接从 shell `exec`**（会报 `Node.js environment variables are disabled because this process is invoked by other apps` 并直接退出），必须经 `open -a`（LaunchServices）启动；但 `open` 又不继承 shell 的 `HOME`。因此本脚本改用「包装 .app」方案——由 `open -a` 启动包装 app 拿到合法上下文绕开报错，同时把 HOME 隔离到位。若你的版本仍有问题，可改用**第二 macOS 用户兜底**：新建一个 macOS 用户 → 快速用户切换登录该用户 → 在其会话里跑 WorkBuddy 登 B。
 
 ---
 

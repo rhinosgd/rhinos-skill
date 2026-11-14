@@ -23,7 +23,7 @@ WorkBuddy 有两条"按操作系统用户隔离"的硬约束（已从安装包 `
 | 平台 | 第二窗口隔离方式 | 是否需要管理员 | 可靠性 |
 |------|----------------|---------------|--------|
 | Windows | 新建第二个本地 Windows 用户（如 `WBUser2`），`runas` 启动 | 是（建用户/写其他用户目录） | 已验证 ✅ |
-| macOS | 为第二实例指定独立的 `HOME` 目录（历史克隆进去） | 否 | 实验性 ⚠️，附第二用户兜底 |
+| macOS | 为第二实例指定独立的 `HOME` 目录（包装 .app + `open -a` 启动） | 否 | 已验证 ✅ |
 
 ## 使用方法（给安装此 Skill 的设备）
 
@@ -43,9 +43,9 @@ WorkBuddy 有两条"按操作系统用户隔离"的硬约束（已从安装包 `
    ```bash
    bash "<skill>/scripts/setup_mac.sh" [ALT_HOME] [WORKBUDDY_APP]
    ```
-2. 脚本会：创建独立 `HOME`（默认 `~/WorkBuddyAltHome`）→ 把当前 `.workbuddy` 历史定向克隆进去 → 在桌面生成 **`WorkBuddy 2Accounts.command`**。
+2. 脚本会：创建独立 `HOME`（默认 `~/WorkBuddyAltHome`）→ 把当前 `.workbuddy` 历史定向克隆进去 → 生成一个**包装 .app**（`~/WorkBuddyAlt.app`，设好 `HOME` 后 `exec` 真正的二进制）→ 在桌面生成 **`WorkBuddy 2Accounts.command`** 启动器（用 `open -a` 拉起主窗口与包装 .app）。
 3. 双击该 `.command`：窗口 1 = 主账号 A；窗口 2 = 独立 HOME 下的实例，登录账号 B 即可看到 B 的历史。
-4. 若第二窗口被"单实例锁"拦截无法启动，改用 Skill 说明里的**第二 macOS 用户兜底方案**（建立方用户 + 快速用户切换，或 `sudo -u` 启动）。
+4. 说明：WorkBuddy 的 Electron 二进制不能直接从 shell `exec`（会报错退出），必须经 `open -a` 启动；但 `open` 不继承 shell 的 `HOME`，故用「包装 .app」解决。若你的版本仍有问题，改用**第二 macOS 用户兜底方案**（建第二个 macOS 用户 + 快速用户切换）。
 
 ## 重要说明与限制
 
@@ -60,5 +60,5 @@ WorkBuddy 有两条"按操作系统用户隔离"的硬约束（已从安装包 `
 
 1. 用 `uname` / `$env:OS` 判断平台。
 2. **Windows**：先确认以管理员运行；运行 `setup_windows.ps1`（可传参），完成后核对桌面快捷方式存在、目标 `workbuddy.db` 与源字节一致、第二用户已建。
-3. **macOS**：运行 `setup_mac.sh`；提示用户这是实验性方案，若单实例锁拦截则引导第二用户兜底。
+3. **macOS**：运行 `setup_mac.sh`（脚本会自动建包装 .app 并生成桌面启动器）；说明二进制不能直接 exec、需走 `open -a` 包装方案，若仍失败则引导第二用户兜底。
 4. 向用户清晰说明：窗口 1=A（自动）、窗口 2=B（需登录一次）、历史沿用、工程文件限制。
